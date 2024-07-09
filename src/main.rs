@@ -65,7 +65,7 @@ async fn main() -> Result<(), rocket::Error> {
     let config: Config = figment.extract().expect("Panic");
 
 
-    rocket.manage(DbConnection::init(config.username.as_str(), config.password.as_str()).await.unwrap())
+    rocket.manage(DbConnection::init(config.db_url.as_str(), config.username.as_str(), config.password.as_str()).await.unwrap())
         .mount("/", routes![create_game])
         .launch()
         .await?;
