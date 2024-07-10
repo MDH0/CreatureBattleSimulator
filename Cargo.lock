@@ -9,7 +9,6 @@ dependencies = [
  "rocket",
  "serde",
  "surrealdb",
- "uuid",
 ]
 
 [[package]]

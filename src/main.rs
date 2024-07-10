@@ -1,20 +1,15 @@
 #[macro_use]
 extern crate rocket;
 
-use rocket::futures::future::err;
-use rocket::http::Status;
-use rocket::response::status;
-use rocket::serde::json::serde_json::json;
-use rocket::serde::json::Json;
-use rocket::State;
-use serde::de::value::StringDeserializer;
+use rocket::{http::Status, response::status, serde::json::Json, State};
 use serde::{Deserialize, Serialize};
-use surrealdb::engine::remote::ws::Client;
-use surrealdb::engine::remote::ws::Ws;
-use surrealdb::opt::auth::Root;
-use surrealdb::sql::{Id, Thing};
-use surrealdb::Surreal;
-use uuid::Uuid;
+use surrealdb::{
+    engine::remote::ws::Client,
+    engine::remote::ws::Ws,
+    opt::auth::Root,
+    sql::{Id, Thing},
+    Surreal,
+};
 
 #[derive(Serialize, Deserialize)]
 struct Game {
@@ -52,7 +47,7 @@ struct PostGameResponse {
     game_id: String,
 }
 
-#[post("/game")]
+#[post("/games")]
 async fn create_game(
     db: &State<DbConnection>,
 ) -> Result<Json<PostGameResponse>, status::Custom<String>> {
@@ -65,9 +60,9 @@ async fn create_game(
                 return Err(status::Custom(
                     Status::InternalServerError,
                     String::from("Something went wrong. Error code: 1"),
-                ))
+                ));
             }
-            let game_id = result.get(0).unwrap().id.to_string();
+            let game_id = result.get(0).unwrap().id.id.to_string();
             Ok(Json(PostGameResponse { game_id }))
         }
         Err(err) => Err(status::Custom(Status::InternalServerError, err.to_string())),
