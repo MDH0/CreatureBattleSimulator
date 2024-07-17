@@ -1,72 +1,18 @@
+mod responses;
+mod routes;
+mod db;
+
 #[macro_use]
 extern crate rocket;
 
-use rocket::{http::Status, response::status, serde::json::Json, State};
 use serde::{Deserialize, Serialize};
-use surrealdb::{
-    engine::remote::ws::Client,
-    engine::remote::ws::Ws,
-    opt::auth::Root,
-    sql::{Id, Thing},
-    Surreal,
-};
+use crate::db::DbConnection;
 
 #[derive(Serialize, Deserialize)]
-struct Game {
-    id: Thing,
-}
-
-impl Default for Game {
-    fn default() -> Self {
-        Game {
-            id: Thing::from(("games", Id::rand())),
-        }
-    }
-}
-
-struct DbConnection {
-    pub conn: Surreal<Client>,
-}
-
-impl DbConnection {
-    pub async fn init(url: &str, username: &str, password: &str) -> Result<Self, surrealdb::Error> {
-        let db = Surreal::new::<Ws>(url).await?;
-
-        db.signin(Root { username, password }).await?;
-
-        db.use_ns("CreatureBattleSimulator")
-            .use_db("CreatureBattleSimulator")
-            .await?;
-
-        Ok(DbConnection { conn: db })
-    }
-}
-
-#[derive(Serialize, Deserialize)]
-struct PostGameResponse {
-    game_id: String,
-}
-
-#[post("/games")]
-async fn create_game(
-    db: &State<DbConnection>,
-) -> Result<Json<PostGameResponse>, status::Custom<String>> {
-    let game = Game::default();
-    let db_result: Result<Vec<Game>, surrealdb::Error> =
-        db.conn.create("games").content(game).await;
-    match db_result {
-        Ok(result) => {
-            if result.len() > 1 {
-                return Err(status::Custom(
-                    Status::InternalServerError,
-                    String::from("Something went wrong. Error code: 1"),
-                ));
-            }
-            let game_id = result.get(0).unwrap().id.id.to_string();
-            Ok(Json(PostGameResponse { game_id }))
-        }
-        Err(err) => Err(status::Custom(Status::InternalServerError, err.to_string())),
-    }
+enum GameState {
+    Pending,
+    Started,
+    Finished,
 }
 
 #[derive(Deserialize, Debug)]
@@ -93,7 +39,7 @@ async fn main() -> Result<(), rocket::Error> {
             .await
             .unwrap(),
         )
-        .mount("/", routes![create_game])
+        .mount("/", routes![routes::create_game])
         .launch()
         .await?;
 
