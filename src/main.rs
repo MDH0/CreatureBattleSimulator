@@ -1,14 +1,15 @@
+mod db;
 mod responses;
 mod routes;
-mod db;
 
 #[macro_use]
 extern crate rocket;
 
-use serde::{Deserialize, Serialize};
 use crate::db::DbConnection;
+use rocket::{Build, Rocket};
+use serde::{Deserialize, Serialize};
 
-#[derive(Serialize, Deserialize)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 enum GameState {
     Pending,
     Started,
@@ -23,11 +24,12 @@ struct Config {
     db_url: String,
 }
 
-#[rocket::main]
-async fn main() -> Result<(), rocket::Error> {
+async fn build_the_rocket() -> Rocket<Build> {
     let rocket = rocket::build();
     let figment = rocket.figment();
-    let config: Config = figment.extract().expect("Panic");
+    let config: Config = figment
+        .extract()
+        .expect("Missing username, password or database url.");
 
     rocket
         .manage(
@@ -40,8 +42,11 @@ async fn main() -> Result<(), rocket::Error> {
             .unwrap(),
         )
         .mount("/", routes![routes::create_game])
-        .launch()
-        .await?;
+}
+
+#[rocket::main]
+async fn main() -> Result<(), rocket::Error> {
+    let _ = build_the_rocket().await.launch().await?;
 
     Ok(())
 }

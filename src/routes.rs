@@ -1,4 +1,4 @@
-use crate::{responses::PostGameResponse, db::DbConnection, db::Game, GameState};
+use crate::{db::DbConnection, db::Game, responses::PostGameResponse, GameState};
 use rocket::http::Status;
 use rocket::response::status;
 use rocket::serde::json::Json;
@@ -26,5 +26,24 @@ pub async fn create_game(
             }))
         }
         Err(err) => Err(status::Custom(Status::InternalServerError, err.to_string())),
+    }
+}
+
+#[cfg(test)]
+mod test {
+    use crate::*;
+    use rocket::http::Status;
+    use rocket::local::asynchronous::Client;
+
+    #[rocket::async_test]
+    async fn testing_test() {
+        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+        let response = client.post(uri!(super::create_game)).dispatch().await;
+        assert_eq!(response.status(), Status::Ok);
+        let response_message = response
+            .into_json::<responses::PostGameResponse>()
+            .await
+            .expect("Invalid response from server.");
+        assert_eq!(response_message.state, GameState::Pending);
     }
 }

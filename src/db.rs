@@ -1,9 +1,9 @@
+use crate::GameState;
 use rocket::serde::{Deserialize, Serialize};
 use surrealdb::engine::remote::ws::{Client, Ws};
 use surrealdb::opt::auth::Root;
 use surrealdb::sql::{Id, Thing};
 use surrealdb::Surreal;
-use crate::GameState;
 
 #[derive(Serialize, Deserialize)]
 pub struct Game {
