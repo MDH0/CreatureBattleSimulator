@@ -1,4 +1,4 @@
-use crate::GameState;
+use crate::db::entities::GameState;
 use rocket::serde::{Deserialize, Serialize};
 
 #[derive(Serialize, Deserialize)]

@@ -1,20 +1,12 @@
+mod api;
 mod db;
-mod responses;
-mod routes;
 
 #[macro_use]
 extern crate rocket;
 
-use crate::db::DbConnection;
+use crate::{api::routes, db::DbConnection};
 use rocket::{Build, Rocket};
 use serde::{Deserialize, Serialize};
-
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
-enum GameState {
-    Pending,
-    Ongoing,
-    Finished,
-}
 
 #[derive(Deserialize, Debug)]
 #[serde(crate = "rocket::serde")]
