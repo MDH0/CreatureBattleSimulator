@@ -8,7 +8,7 @@ use surrealdb::Surreal;
 #[derive(Serialize, Deserialize)]
 pub struct Game {
     pub(crate) id: Thing,
-    state: GameState,
+    pub(crate) state: GameState,
 }
 
 impl Default for Game {

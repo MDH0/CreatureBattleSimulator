@@ -12,7 +12,7 @@ use serde::{Deserialize, Serialize};
 #[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
 enum GameState {
     Pending,
-    Started,
+    Ongoing,
     Finished,
 }
 
@@ -33,6 +33,7 @@ async fn build_the_rocket() -> Rocket<Build> {
 
     rocket
         .manage(
+            //Can we directly manage the underlying Surreal<Client> and use a helper function instead?
             DbConnection::init(
                 config.db_url.as_str(),
                 config.username.as_str(),
@@ -41,7 +42,7 @@ async fn build_the_rocket() -> Rocket<Build> {
             .await
             .unwrap(),
         )
-        .mount("/", routes![routes::create_game])
+        .mount("/", routes![routes::create_game, routes::join_game])
 }
 
 #[rocket::main]

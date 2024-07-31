@@ -29,12 +29,53 @@ pub async fn create_game(
     }
 }
 
+//Needs a proper response message.
+#[post("/games/<id>")]
+pub async fn join_game(
+    id: String,
+    db: &State<DbConnection>,
+) -> Result<String, status::Custom<String>> {
+    let game_query: Result<Option<Game>, surrealdb::Error> =
+        db.conn.select(("games", &id)).await;
+    //WTF??
+    return match game_query {
+        Ok(game) => match game {
+            None => {
+                Err(status::Custom(
+                    Status::NotFound,
+                    String::from("Couldn't find the game you're looking for."),
+                ))
+            }
+            Some(mut game) => {
+                if game.state != GameState::Pending {
+                    return Err(status::Custom(
+                        Status::Conflict,
+                        String::from("The game is already active."),
+                    ));
+                }
+                game.state = GameState::Ongoing;
+                let update_result: Result<Option<Game>, surrealdb::Error> =
+                    db.conn.update(("games", &id)).content(game).await;
+                if let Err(err) = update_result {
+                    return Err(status::Custom(Status::InternalServerError, err.to_string()))
+                }
+                Ok(String::from("Joined the game."))
+            }
+        },
+        Err(err) => Err(status::Custom(Status::InternalServerError, err.to_string())),
+    }
+}
+
 #[cfg(test)]
 mod test {
     use crate::*;
     use rocket::http::Status;
     use rocket::local::asynchronous::Client;
 
+    /*This uses the current database for testing, which should be extracted.
+    Testcontainers look like a very promising solution
+    https://testcontainers.com/
+    Also, wtf is the name? */
     #[rocket::async_test]
     async fn testing_test() {
         let client = Client::tracked(build_the_rocket().await).await.unwrap();
