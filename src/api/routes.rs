@@ -1,15 +1,15 @@
-use crate::api::responses::{types::*, CreateGame, ErrorMessage, JoinGame};
+use crate::api::responses::{types::*, CreateGame, ErrorMessage, GetGameStatus, JoinGame};
 use crate::db::{
     entities::{Game, GameState},
     DbConnection,
 };
 use rocket::{http::Status, response::status, serde::json::Json, State};
+use surrealdb::Error;
 
 #[post("/games")]
 pub async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse, ErrorResponse> {
     let game = Game::default();
-    let db_result: Result<Vec<Game>, surrealdb::Error> =
-        db.conn.create("games").content(game).await;
+    let db_result: Result<Vec<Game>, Error> = db.conn.create("games").content(game).await;
     match db_result {
         Ok(result) => {
             if result.len() > 1 {
@@ -96,6 +96,40 @@ pub async fn join_game(
     };
 }
 
+#[get("/games/<id>")]
+pub async fn get_game_state(
+    id: String,
+    db: &State<DbConnection>,
+) -> Result<GetGameStatusResponse, ErrorResponse> {
+    let game_query: Result<Option<Game>, Error> = db.conn.select(("games", &id)).await;
+    return match game_query {
+        Ok(game) => {
+            return match game {
+                None => Err(status::Custom(
+                    Status::NotFound,
+                    Json(ErrorMessage {
+                        error_message: String::from("Couldn't find the game you're looking for."),
+                        error_code: None,
+                    }),
+                )),
+                Some(game) => Ok(status::Custom(
+                    Status::Ok,
+                    Json(GetGameStatus {
+                        game_status: game.state,
+                    }),
+                )),
+            }
+        }
+        Err(err) => Err(status::Custom(
+            Status::InternalServerError,
+            Json(ErrorMessage {
+                error_message: err.to_string(),
+                error_code: None,
+            }),
+        )),
+    };
+}
+
 #[cfg(test)]
 mod test {
     use crate::db::entities::Game;
@@ -144,7 +178,7 @@ mod test {
     }
 
     #[rocket::async_test]
-    async fn test_game_does_not_exist() {
+    async fn test_joining_non_existent_game() {
         let client = Client::tracked(build_the_rocket().await).await.unwrap();
 
         let response = client
@@ -174,5 +208,46 @@ mod test {
             .await;
 
         assert_eq!(response.status(), Status::Conflict);
+    }
+
+    #[rocket::async_test]
+    async fn test_get_valid_game_status() {
+        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+        let db = client.rocket().state::<DbConnection>().unwrap();
+        let game1 = Game::default();
+        let mut game2 = Game::default();
+        game2.state = GameState::Ongoing;
+        let mut game3 = Game::default();
+        game3.state = GameState::Finished;
+        let games = vec![game1, game2, game3];
+
+        for game in games {
+            let _: Vec<Game> = db
+                .conn
+                .create("games")
+                .content(&game)
+                .await
+                .expect("Creating game failed.");
+            let response = client
+                .get(uri!(super::get_game_state(game.id.id.to_string())))
+                .dispatch()
+                .await;
+
+            assert_eq!(response.status(), Status::Ok);
+            let response = response
+                .into_json::<responses::GetGameStatus>()
+                .await
+                .expect("Invalid response from server.");
+            assert_eq!(response.game_status, game.state);
+        }
+    }
+
+    #[rocket::async_test]
+    async fn test_getting_status_of_non_existent_game() {
+        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+
+        let response = client.get(uri!(super::get_game_state("Somerandomstring"))).dispatch().await;
+
+        assert_eq!(response.status(), Status::NotFound);
     }
 }

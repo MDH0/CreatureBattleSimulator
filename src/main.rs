@@ -34,7 +34,7 @@ async fn build_the_rocket() -> Rocket<Build> {
             .await
             .unwrap(),
         )
-        .mount("/", routes![routes::create_game, routes::join_game])
+        .mount("/", routes![routes::create_game, routes::join_game, routes::get_game_state])
 }
 
 #[rocket::main]
