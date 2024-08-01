@@ -6,7 +6,7 @@ extern crate rocket;
 
 use crate::{api::routes, db::DbConnection};
 use rocket::{Build, Rocket};
-use serde::{Deserialize, Serialize};
+use serde::Deserialize;
 
 #[derive(Deserialize, Debug)]
 #[serde(crate = "rocket::serde")]

@@ -1,6 +1,5 @@
 pub mod entities;
 
-use rocket::serde::{Deserialize, Serialize};
 use surrealdb::{
     engine::remote::ws::{Client, Ws},
     opt::auth::Root,
