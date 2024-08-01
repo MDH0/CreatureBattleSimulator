@@ -4,12 +4,12 @@ use crate::db::{
     DbConnection,
 };
 use rocket::{http::Status, response::status, serde::json::Json, State};
-use surrealdb::Error;
 
 #[post("/games")]
 pub async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse, ErrorResponse> {
     let game = Game::default();
-    let db_result: Result<Vec<Game>, Error> = db.conn.create("games").content(game).await;
+    let db_result: Result<Vec<Game>, surrealdb::Error> =
+        db.conn.create("games").content(game).await;
     match db_result {
         Ok(result) => {
             if result.len() > 1 {
@@ -42,10 +42,10 @@ pub async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse,
 
 #[post("/games/<id>")]
 pub async fn join_game(
-    id: String,
+    id: &str,
     db: &State<DbConnection>,
 ) -> Result<JoinGameResponse, ErrorResponse> {
-    let game_query: Result<Option<Game>, surrealdb::Error> = db.conn.select(("games", &id)).await;
+    let game_query: Result<Option<Game>, surrealdb::Error> = db.conn.select(("games", id)).await;
     //WTF??
     return match game_query {
         Ok(game) => match game {
@@ -68,7 +68,7 @@ pub async fn join_game(
                 }
                 game.state = GameState::Ongoing;
                 let update_result: Result<Option<Game>, surrealdb::Error> =
-                    db.conn.update(("games", &id)).content(game).await;
+                    db.conn.update(("games", id)).content(game).await;
                 if let Err(err) = update_result {
                     return Err(status::Custom(
                         Status::InternalServerError,
@@ -98,10 +98,10 @@ pub async fn join_game(
 
 #[get("/games/<id>")]
 pub async fn get_game_state(
-    id: String,
+    id: &str,
     db: &State<DbConnection>,
 ) -> Result<GetGameStatusResponse, ErrorResponse> {
-    let game_query: Result<Option<Game>, Error> = db.conn.select(("games", &id)).await;
+    let game_query: Result<Option<Game>, surrealdb::Error> = db.conn.select(("games", id)).await;
     return match game_query {
         Ok(game) => {
             return match game {
@@ -246,7 +246,10 @@ mod test {
     async fn test_getting_status_of_non_existent_game() {
         let client = Client::tracked(build_the_rocket().await).await.unwrap();
 
-        let response = client.get(uri!(super::get_game_state("Somerandomstring"))).dispatch().await;
+        let response = client
+            .get(uri!(super::get_game_state("Somerandomstring")))
+            .dispatch()
+            .await;
 
         assert_eq!(response.status(), Status::NotFound);
     }
