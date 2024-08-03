@@ -11,18 +11,12 @@ use serde::Deserialize;
 #[derive(Deserialize, Debug)]
 #[serde(crate = "rocket::serde")]
 struct Config {
-    username: String,
-    password: String,
-    db_url: String,
+    pub username: String,
+    pub password: String,
+    pub db_url: String,
 }
 
-async fn build_the_rocket() -> Rocket<Build> {
-    let rocket = rocket::build();
-    let figment = rocket.figment();
-    let config: Config = figment
-        .extract()
-        .expect("Missing username, password or database url.");
-
+async fn build_the_rocket(rocket: Rocket<Build>, config: Config) -> Rocket<Build> {
     rocket
         .manage(
             //Can we directly manage the underlying Surreal<Client> and use a helper function instead?
@@ -46,7 +40,13 @@ async fn build_the_rocket() -> Rocket<Build> {
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
-    let _ = build_the_rocket().await.launch().await?;
+    let rocket = rocket::build();
+    let figment = rocket.figment();
+    let config = figment
+        .extract()
+        .expect("Missing username, password or database url.");
+
+    let _ = build_the_rocket(rocket, config).await.launch().await?;
 
     Ok(())
 }

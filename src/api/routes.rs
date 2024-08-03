@@ -135,13 +135,57 @@ mod test {
     use crate::db::entities::Game;
     use crate::{api::responses, db::entities::GameState, *};
     use rocket::{http::Status, local::asynchronous::Client};
-    /*This uses the current database for testing, which should be extracted.
-    Testcontainers look like a very promising solution
-    https://testcontainers.com/
-    Also, wtf is the name? */
+    use testcontainers_modules::{
+        surrealdb,
+        testcontainers::{runners::AsyncRunner, ImageExt},
+    };
+    /* I really would like to use this helper method, but for some reasons tests are just stuck doing nothing when using it
+    async fn create_client() -> Client {
+        let db_instance = surrealdb::SurrealDb::default()
+            .with_tag("v1.5.3")
+            .start()
+            .await
+            .expect("Something went wrong. Do you have a container runtime installed?");
+        let rocket = rocket::build();
+        let config = Config {
+            db_url: String::from(format!(
+                "127.0.0.1:{}",
+                db_instance
+                    .get_host_port_ipv4(surrealdb::SURREALDB_PORT)
+                    .await
+                    .unwrap()
+            )),
+            username: String::from("root"),
+            password: String::from("root"),
+        };
+        let client = Client::tracked(build_the_rocket(rocket, config).await)
+            .await
+            .unwrap();
+        client
+    }*/
+
     #[rocket::async_test]
     async fn test_create_game() {
-        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+        let db_instance = surrealdb::SurrealDb::default()
+            .with_tag("v1.5.3")
+            .start()
+            .await
+            .expect("Something went wrong. Do you have a container runtime installed?");
+        let rocket = rocket::build();
+        let config = Config {
+            db_url: String::from(format!(
+                "127.0.0.1:{}",
+                db_instance
+                    .get_host_port_ipv4(surrealdb::SURREALDB_PORT)
+                    .await
+                    .unwrap()
+            )),
+            username: String::from("root"),
+            password: String::from("root"),
+        };
+        let client = Client::tracked(build_the_rocket(rocket, config).await)
+            .await
+            .unwrap();
 
         let response = client.post(uri!(super::create_game)).dispatch().await;
 
@@ -155,7 +199,26 @@ mod test {
 
     #[rocket::async_test]
     async fn test_joining_a_game() {
-        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+        let db_instance = surrealdb::SurrealDb::default()
+            .with_tag("v1.5.3")
+            .start()
+            .await
+            .expect("Something went wrong. Do you have a container runtime installed?");
+        let rocket = rocket::build();
+        let config = Config {
+            db_url: String::from(format!(
+                "127.0.0.1:{}",
+                db_instance
+                    .get_host_port_ipv4(surrealdb::SURREALDB_PORT)
+                    .await
+                    .unwrap()
+            )),
+            username: String::from("root"),
+            password: String::from("root"),
+        };
+        let client = Client::tracked(build_the_rocket(rocket, config).await)
+            .await
+            .unwrap();
         let db = client.rocket().state::<DbConnection>().unwrap();
         let game = Game::default();
         let _: Vec<Game> = db
@@ -179,7 +242,26 @@ mod test {
 
     #[rocket::async_test]
     async fn test_joining_non_existent_game() {
-        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+        let db_instance = surrealdb::SurrealDb::default()
+            .with_tag("v1.5.3")
+            .start()
+            .await
+            .expect("Something went wrong. Do you have a container runtime installed?");
+        let rocket = rocket::build();
+        let config = Config {
+            db_url: String::from(format!(
+                "127.0.0.1:{}",
+                db_instance
+                    .get_host_port_ipv4(surrealdb::SURREALDB_PORT)
+                    .await
+                    .unwrap()
+            )),
+            username: String::from("root"),
+            password: String::from("root"),
+        };
+        let client = Client::tracked(build_the_rocket(rocket, config).await)
+            .await
+            .unwrap();
 
         let response = client
             .post(uri!(super::join_game(String::from("lmao"))))
@@ -191,7 +273,26 @@ mod test {
 
     #[rocket::async_test]
     async fn test_game_is_not_pending() {
-        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+        let db_instance = surrealdb::SurrealDb::default()
+            .with_tag("v1.5.3")
+            .start()
+            .await
+            .expect("Something went wrong. Do you have a container runtime installed?");
+        let rocket = rocket::build();
+        let config = Config {
+            db_url: String::from(format!(
+                "127.0.0.1:{}",
+                db_instance
+                    .get_host_port_ipv4(surrealdb::SURREALDB_PORT)
+                    .await
+                    .unwrap()
+            )),
+            username: String::from("root"),
+            password: String::from("root"),
+        };
+        let client = Client::tracked(build_the_rocket(rocket, config).await)
+            .await
+            .unwrap();
         let db = client.rocket().state::<DbConnection>().unwrap();
         let mut game = Game::default();
         game.state = GameState::Ongoing;
@@ -212,7 +313,26 @@ mod test {
 
     #[rocket::async_test]
     async fn test_get_valid_game_status() {
-        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+        let db_instance = surrealdb::SurrealDb::default()
+            .with_tag("v1.5.3")
+            .start()
+            .await
+            .expect("Something went wrong. Do you have a container runtime installed?");
+        let rocket = rocket::build();
+        let config = Config {
+            db_url: String::from(format!(
+                "127.0.0.1:{}",
+                db_instance
+                    .get_host_port_ipv4(surrealdb::SURREALDB_PORT)
+                    .await
+                    .unwrap()
+            )),
+            username: String::from("root"),
+            password: String::from("root"),
+        };
+        let client = Client::tracked(build_the_rocket(rocket, config).await)
+            .await
+            .unwrap();
         let db = client.rocket().state::<DbConnection>().unwrap();
         let game1 = Game::default();
         let mut game2 = Game::default();
@@ -244,7 +364,26 @@ mod test {
 
     #[rocket::async_test]
     async fn test_getting_status_of_non_existent_game() {
-        let client = Client::tracked(build_the_rocket().await).await.unwrap();
+        let db_instance = surrealdb::SurrealDb::default()
+            .with_tag("v1.5.3")
+            .start()
+            .await
+            .expect("Something went wrong. Do you have a container runtime installed?");
+        let rocket = rocket::build();
+        let config = Config {
+            db_url: String::from(format!(
+                "127.0.0.1:{}",
+                db_instance
+                    .get_host_port_ipv4(surrealdb::SURREALDB_PORT)
+                    .await
+                    .unwrap()
+            )),
+            username: String::from("root"),
+            password: String::from("root"),
+        };
+        let client = Client::tracked(build_the_rocket(rocket, config).await)
+            .await
+            .unwrap();
 
         let response = client
             .get(uri!(super::get_game_state("Somerandomstring")))
