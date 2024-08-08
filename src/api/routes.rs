@@ -164,10 +164,12 @@ mod test {
         client
     }*/
 
+    const SURREALDB_VERSION: &str = "v1.5.4";
+
     #[rocket::async_test]
     async fn test_create_game() {
         let db_instance = surrealdb::SurrealDb::default()
-            .with_tag("v1.5.4")
+            .with_tag(SURREALDB_VERSION)
             .start()
             .await
             .expect("Something went wrong. Do you have a container runtime installed?");
@@ -200,7 +202,7 @@ mod test {
     #[rocket::async_test]
     async fn test_joining_a_game() {
         let db_instance = surrealdb::SurrealDb::default()
-            .with_tag("v1.5.4")
+            .with_tag(SURREALDB_VERSION)
             .start()
             .await
             .expect("Something went wrong. Do you have a container runtime installed?");
@@ -243,7 +245,7 @@ mod test {
     #[rocket::async_test]
     async fn test_joining_non_existent_game() {
         let db_instance = surrealdb::SurrealDb::default()
-            .with_tag("v1.5.4")
+            .with_tag(SURREALDB_VERSION)
             .start()
             .await
             .expect("Something went wrong. Do you have a container runtime installed?");
@@ -274,7 +276,7 @@ mod test {
     #[rocket::async_test]
     async fn test_game_is_not_pending() {
         let db_instance = surrealdb::SurrealDb::default()
-            .with_tag("v1.5.4")
+            .with_tag(SURREALDB_VERSION)
             .start()
             .await
             .expect("Something went wrong. Do you have a container runtime installed?");
@@ -314,7 +316,7 @@ mod test {
     #[rocket::async_test]
     async fn test_get_valid_game_status() {
         let db_instance = surrealdb::SurrealDb::default()
-            .with_tag("v1.5.4")
+            .with_tag(SURREALDB_VERSION)
             .start()
             .await
             .expect("Something went wrong. Do you have a container runtime installed?");
@@ -365,7 +367,7 @@ mod test {
     #[rocket::async_test]
     async fn test_getting_status_of_non_existent_game() {
         let db_instance = surrealdb::SurrealDb::default()
-            .with_tag("v1.5.4")
+            .with_tag(SURREALDB_VERSION)
             .start()
             .await
             .expect("Something went wrong. Do you have a container runtime installed?");
