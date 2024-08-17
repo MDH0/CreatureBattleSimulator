@@ -7,6 +7,7 @@ use rocket::{http::Status, response::status, serde::json::Json, State};
 
 #[post("/games")]
 pub async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse, ErrorResponse> {
+    log::info!("Test");
     let game = Game::default();
     let db_result: Result<Vec<Game>, surrealdb::Error> =
         db.conn.create("games").content(game).await;
