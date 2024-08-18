@@ -40,6 +40,8 @@ async fn build_the_rocket(rocket: Rocket<Build>, config: Config) -> Rocket<Build
 
 #[rocket::main]
 async fn main() -> Result<(), rocket::Error> {
+    log4rs::init_file("log4rs.yaml", Default::default()).unwrap();
+
     let rocket = rocket::build();
     let figment = rocket.figment();
     let config = figment

@@ -4,39 +4,54 @@ use crate::db::{
     DbConnection,
 };
 use rocket::{http::Status, response::status, serde::json::Json, State};
+use uuid::Uuid;
 
 #[post("/games")]
 pub async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse, ErrorResponse> {
+    let trace_id = Uuid::new_v4();
+    /*
+    Sending logs with a trace_id like this is currently just a workaround.
+    https://github.com/estk/log4rs/pull/362 should make it more clean in the future.
+     */
+    log::info!("{} | Received create game request", trace_id.to_string());
     let game = Game::default();
     let db_result: Result<Vec<Game>, surrealdb::Error> =
         db.conn.create("games").content(game).await;
     match db_result {
         Ok(result) => {
             if result.len() > 1 {
+                log::error!("{} | {}", trace_id.to_string(), "Error 1: Request started more than 1 game");
                 return Err(status::Custom(
                     Status::InternalServerError,
                     Json(ErrorMessage {
+                        trace_id,
                         error_message: String::from("Something went wrong."),
                         error_code: Some(1),
                     }),
                 ));
             }
             let game_id = result.get(0).unwrap().id.id.to_string(); //This looks cursed
+            log::info!("{} | Created game with id: {}", trace_id.to_string(), game_id);
             Ok(status::Custom(
                 Status::Created,
                 Json(CreateGame {
+                    trace_id,
                     game_id,
                     state: GameState::Pending,
                 }),
             ))
         }
-        Err(err) => Err(status::Custom(
-            Status::InternalServerError,
-            Json(ErrorMessage {
-                error_message: err.to_string(),
-                error_code: None,
-            }),
-        )),
+        Err(err) => {
+            log::error!("{} | {}", trace_id.to_string(), err.to_string());
+            Err(status::Custom(
+                Status::InternalServerError,
+                Json(ErrorMessage {
+                    trace_id,
+                    error_message: err.to_string(),
+                    error_code: None,
+                }),
+            ))
+        },
     }
 }
 
@@ -45,23 +60,31 @@ pub async fn join_game(
     id: &str,
     db: &State<DbConnection>,
 ) -> Result<JoinGameResponse, ErrorResponse> {
+    let trace_id = Uuid::new_v4();
+    log::info!("{} | Received join game request for id: {}", trace_id.to_string(), id);
     let game_query: Result<Option<Game>, surrealdb::Error> = db.conn.select(("games", id)).await;
     //WTF??
     return match game_query {
         Ok(game) => match game {
-            None => Err(status::Custom(
-                Status::NotFound,
-                Json(ErrorMessage {
-                    error_message: String::from("Couldn't find the game you're looking for."),
-                    error_code: None,
-                }),
-            )),
+            None => {
+                log::info!("{} | Game with id {} does not exist", trace_id, id);
+                Err(status::Custom(
+                    Status::NotFound,
+                    Json(ErrorMessage {
+                        trace_id,
+                        error_message: String::from("Couldn't find the game you're looking for."),
+                        error_code: None,
+                    }),
+                ))
+            },
             Some(mut game) => {
                 if game.state != GameState::Pending {
+                    log::info!("{} | Game with id {} does exist, but is not available to join.", trace_id.to_string(), id);
                     return Err(status::Custom(
                         Status::Conflict,
                         Json(ErrorMessage {
-                            error_message: String::from("The game is already active."),
+                            trace_id,
+                            error_message: String::from("The game is already active or finished."),
                             error_code: None,
                         }),
                     ));
@@ -70,29 +93,37 @@ pub async fn join_game(
                 let update_result: Result<Option<Game>, surrealdb::Error> =
                     db.conn.update(("games", id)).content(game).await;
                 if let Err(err) = update_result {
+                    log::error!("{} | {}", trace_id.to_string(), err.to_string());
                     return Err(status::Custom(
                         Status::InternalServerError,
                         Json(ErrorMessage {
+                            trace_id,
                             error_message: err.to_string(),
                             error_code: None,
                         }),
                     ));
                 }
+                log::info!("{} | Joined game with id {}", trace_id.to_string(), id);
                 Ok(status::Custom(
                     Status::Ok,
                     Json(JoinGame {
+                        trace_id,
                         message: String::from("Joined the game."),
                     }),
                 ))
             }
         },
-        Err(err) => Err(status::Custom(
-            Status::InternalServerError,
-            Json(ErrorMessage {
-                error_message: err.to_string(),
-                error_code: None,
-            }),
-        )),
+        Err(err) => {
+            log::error!("{} | {}", trace_id.to_string(), err.to_string());
+            Err(status::Custom(
+                Status::InternalServerError,
+                Json(ErrorMessage {
+                    trace_id,
+                    error_message: err.to_string(),
+                    error_code: None,
+                }),
+            ))
+        },
     };
 }
 
@@ -101,33 +132,47 @@ pub async fn get_game_state(
     id: &str,
     db: &State<DbConnection>,
 ) -> Result<GetGameStatusResponse, ErrorResponse> {
+    let trace_id = Uuid::new_v4();
+    log::info!("{} | Received get game status request for id: {}", trace_id.to_string(), id);
     let game_query: Result<Option<Game>, surrealdb::Error> = db.conn.select(("games", id)).await;
-    return match game_query {
+    match game_query {
         Ok(game) => {
-            return match game {
-                None => Err(status::Custom(
-                    Status::NotFound,
-                    Json(ErrorMessage {
-                        error_message: String::from("Couldn't find the game you're looking for."),
-                        error_code: None,
-                    }),
-                )),
-                Some(game) => Ok(status::Custom(
-                    Status::Ok,
-                    Json(GetGameStatus {
-                        game_status: game.state,
-                    }),
-                )),
+            match game {
+                None => {
+                    log::info!("{} | Game with id {} does not exist", trace_id, id);
+                    Err(status::Custom(
+                        Status::NotFound,
+                        Json(ErrorMessage {
+                            trace_id,
+                            error_message: String::from("Couldn't find the game you're looking for."),
+                            error_code: None,
+                        }),
+                    ))
+                },
+                Some(game) => {
+                    log::info!("{} | Received game status {:?}", trace_id, game.state);
+                    Ok(status::Custom(
+                        Status::Ok,
+                        Json(GetGameStatus {
+                            trace_id,
+                            game_status: game.state,
+                        }),
+                    ))
+                },
             }
         }
-        Err(err) => Err(status::Custom(
-            Status::InternalServerError,
-            Json(ErrorMessage {
-                error_message: err.to_string(),
-                error_code: None,
-            }),
-        )),
-    };
+        Err(err) => {
+            log::error!("{} | {}", trace_id.to_string(), err.to_string());
+            Err(status::Custom(
+                Status::InternalServerError,
+                Json(ErrorMessage {
+                    trace_id,
+                    error_message: err.to_string(),
+                    error_code: None,
+                }),
+            ))
+        },
+    }
 }
 
 #[cfg(test)]
