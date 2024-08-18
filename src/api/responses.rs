@@ -1,24 +1,29 @@
 use crate::db::entities::GameState;
 use rocket::serde::{Deserialize, Serialize};
+use uuid::Uuid;
 
 #[derive(Serialize, Deserialize)]
 pub struct CreateGame {
+    pub(crate) trace_id: Uuid,
     pub(crate) game_id: String,
     pub(crate) state: GameState,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct JoinGame {
+    pub(crate) trace_id: Uuid,
     pub(crate) message: String,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct GetGameStatus {
+    pub(crate) trace_id: Uuid,
     pub(crate) game_status: GameState,
 }
 
 #[derive(Serialize, Deserialize)]
 pub struct ErrorMessage {
+    pub(crate) trace_id: Uuid,
     pub(crate) error_message: String,
     pub(crate) error_code: Option<u8>,
 }
