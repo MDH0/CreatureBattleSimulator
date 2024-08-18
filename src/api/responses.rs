@@ -22,6 +22,11 @@ pub struct GetGameStatus {
 }
 
 #[derive(Serialize, Deserialize)]
+pub struct CancelGame {
+    pub(crate) trace_id: Uuid,
+}
+
+#[derive(Serialize, Deserialize)]
 pub struct ErrorMessage {
     pub(crate) trace_id: Uuid,
     pub(crate) error_message: String,
@@ -29,7 +34,7 @@ pub struct ErrorMessage {
 }
 
 pub mod types {
-    use crate::api::responses::{CreateGame, ErrorMessage, GetGameStatus, JoinGame};
+    use crate::api::responses::{CancelGame, CreateGame, ErrorMessage, GetGameStatus, JoinGame};
     use rocket::response::status;
     use rocket::serde::json::Json;
 
@@ -37,5 +42,6 @@ pub mod types {
     pub type ErrorResponse = status::Custom<Json<ErrorMessage>>;
     pub type CreateGameResponse = status::Custom<Json<CreateGame>>;
     pub type JoinGameResponse = status::Custom<Json<JoinGame>>;
+    pub type CancelGameResponse = status::Custom<Json<CancelGame>>;
     pub type GetGameStatusResponse = status::Custom<Json<GetGameStatus>>;
 }

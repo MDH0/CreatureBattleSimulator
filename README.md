@@ -16,7 +16,7 @@ It is as easy as running `cargo build`.
 ## Deploying
 
 If you (for some reason) want to deploy it, make sure you have a SurrealDB instance running somewhere.
-That instance needs a namespace use set up.
+That instance needs a namespace user set up.
 The application expects Rocket environment variables to be set.
 More explicitly: username, password and db_url.
 See https://rocket.rs/guide/v0.5/configuration/ on how to do this.

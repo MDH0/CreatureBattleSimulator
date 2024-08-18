@@ -21,4 +21,5 @@ pub enum GameState {
     Pending,
     Ongoing,
     Finished,
+    Cancelled,
 }

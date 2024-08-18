@@ -33,7 +33,8 @@ async fn build_the_rocket(rocket: Rocket<Build>, config: Config) -> Rocket<Build
             routes![
                 routes::create_game,
                 routes::join_game,
-                routes::get_game_state
+                routes::get_game_state,
+                routes::cancel_game
             ],
         )
 }
