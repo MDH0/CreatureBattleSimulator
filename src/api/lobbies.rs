@@ -1,15 +1,15 @@
-use crate::api::responses::{
-    types::*, CancelGame, CreateGame, ErrorMessage, GetGameStatus, JoinGame,
-};
-use crate::db::{
-    entities::{Game, GameState},
-    DbConnection,
-};
-use rocket::{http::Status, response::status, serde::json::Json, State};
+use rocket::http::Status;
+use rocket::response::status;
+use rocket::serde::json::Json;
+use rocket::State;
 use uuid::Uuid;
+use crate::api::responses::{CancelGame, CreateGame, ErrorMessage, GetGameStatus, JoinGame};
+use crate::api::responses::types::{CancelGameResponse, CreateGameResponse, ErrorResponse, GetGameStatusResponse, JoinGameResponse};
+use crate::db::DbConnection;
+use crate::db::entities::{Game, GameState};
 
 #[post("/games")]
-pub async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse, ErrorResponse> {
+pub(crate) async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse, ErrorResponse> {
     let trace_id = Uuid::new_v4();
     /*
     Sending logs with a trace_id like this is currently just a workaround.
@@ -66,7 +66,7 @@ pub async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse,
 }
 
 #[put("/games/<id>")]
-pub async fn join_game(
+pub(crate) async fn join_game(
     id: &str,
     db: &State<DbConnection>,
 ) -> Result<JoinGameResponse, ErrorResponse> {
@@ -146,7 +146,7 @@ pub async fn join_game(
 }
 
 #[get("/games/<id>")]
-pub async fn get_game_state(
+pub(crate) async fn get_game_state(
     id: &str,
     db: &State<DbConnection>,
 ) -> Result<GetGameStatusResponse, ErrorResponse> {
@@ -196,7 +196,7 @@ pub async fn get_game_state(
 }
 
 #[put("/games/<id>/cancel")]
-pub async fn cancel_game(
+pub(crate) async fn cancel_game(
     id: &str,
     db: &State<DbConnection>,
 ) -> Result<CancelGameResponse, ErrorResponse> {
@@ -242,13 +242,13 @@ pub async fn cancel_game(
                 _ => {
                     log::info!("{} | Game with id {} can not be cancelled", trace_id, id);
                     Err(status::Custom(
-                                Status::Conflict,
-                                Json(ErrorMessage {
-                                    trace_id,
-                                    error_message: String::from("Game can not be cancelled. Either the game is already cancelled or it is already finished."),
-                                    error_code: None,
-                                }),
-                            ))
+                        Status::Conflict,
+                        Json(ErrorMessage {
+                            trace_id,
+                            error_message: String::from("Game can not be cancelled. Either the game is already cancelled or it is already finished."),
+                            error_code: None,
+                        }),
+                    ))
                 }
             },
         },

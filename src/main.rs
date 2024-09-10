@@ -1,10 +1,9 @@
+#[macro_use]
+extern crate rocket;
 mod api;
 mod db;
 
-#[macro_use]
-extern crate rocket;
-
-use crate::{api::routes, db::DbConnection};
+use crate::{api::get_routes, db::DbConnection};
 use rocket::{Build, Rocket};
 use serde::Deserialize;
 
@@ -28,15 +27,7 @@ async fn build_the_rocket(rocket: Rocket<Build>, config: Config) -> Rocket<Build
             .await
             .unwrap(),
         )
-        .mount(
-            "/",
-            routes![
-                routes::create_game,
-                routes::join_game,
-                routes::get_game_state,
-                routes::cancel_game
-            ],
-        )
+        .mount("/", get_routes())
 }
 
 #[rocket::main]
