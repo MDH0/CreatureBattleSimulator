@@ -16,7 +16,7 @@ impl Default for Game {
     }
 }
 
-#[derive(Serialize, Deserialize, Eq, PartialEq, Debug)]
+#[derive(Serialize, Deserialize, Eq, PartialEq, Debug, Copy, Clone)]
 pub enum GameState {
     Pending,
     Ongoing,

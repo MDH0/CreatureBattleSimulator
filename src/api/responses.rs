@@ -6,7 +6,6 @@ use uuid::Uuid;
 pub struct CreateGame {
     pub(crate) trace_id: Uuid,
     pub(crate) game_id: String,
-    pub(crate) state: GameState,
 }
 
 #[derive(Serialize, Deserialize)]

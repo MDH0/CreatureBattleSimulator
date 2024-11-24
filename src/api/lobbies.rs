@@ -1,42 +1,28 @@
-use rocket::http::Status;
-use rocket::response::status;
-use rocket::serde::json::Json;
-use rocket::State;
+use crate::{
+    api::responses::{
+        types::{
+            CancelGameResponse, CreateGameResponse, ErrorResponse, GetGameStatusResponse,
+            JoinGameResponse,
+        },
+        CancelGame, CreateGame, ErrorMessage, GetGameStatus, JoinGame,
+    },
+    db::{entities::GameState, DbConnection},
+};
+use rocket::{http::Status, response::status, serde::json::Json, State};
 use uuid::Uuid;
-use crate::api::responses::{CancelGame, CreateGame, ErrorMessage, GetGameStatus, JoinGame};
-use crate::api::responses::types::{CancelGameResponse, CreateGameResponse, ErrorResponse, GetGameStatusResponse, JoinGameResponse};
-use crate::db::DbConnection;
-use crate::db::entities::{Game, GameState};
 
 #[post("/games")]
-pub(crate) async fn create_game(db: &State<DbConnection>) -> Result<CreateGameResponse, ErrorResponse> {
+pub(crate) async fn create_game(
+    db: &State<DbConnection>,
+) -> Result<CreateGameResponse, ErrorResponse> {
     let trace_id = Uuid::new_v4();
     /*
     Sending logs with a trace_id like this is currently just a workaround.
     https://github.com/estk/log4rs/pull/362 should make it more clean in the future.
      */
     log::info!("{} | Received create game request", trace_id.to_string());
-    let game = Game::default();
-    let db_result: Result<Vec<Game>, surrealdb::Error> =
-        db.conn.create("games").content(game).await;
-    match db_result {
-        Ok(result) => {
-            if result.len() > 1 {
-                log::error!(
-                    "{} | {}",
-                    trace_id.to_string(),
-                    "Error 1: Request started more than 1 game"
-                );
-                return Err(status::Custom(
-                    Status::InternalServerError,
-                    Json(ErrorMessage {
-                        trace_id,
-                        error_message: String::from("Something went wrong."),
-                        error_code: Some(1),
-                    }),
-                ));
-            }
-            let game_id = result.get(0).unwrap().id.id.to_string(); //This looks cursed
+    match db.create_game().await {
+        Ok(game_id) => {
             log::info!(
                 "{} | Created game with id: {}",
                 trace_id.to_string(),
@@ -44,20 +30,16 @@ pub(crate) async fn create_game(db: &State<DbConnection>) -> Result<CreateGameRe
             );
             Ok(status::Custom(
                 Status::Created,
-                Json(CreateGame {
-                    trace_id,
-                    game_id,
-                    state: GameState::Pending,
-                }),
+                Json(CreateGame { trace_id, game_id }),
             ))
         }
         Err(err) => {
-            log::error!("{} | {}", trace_id.to_string(), err.to_string());
+            log::error!("{} | {}", trace_id.to_string(), err.message);
             Err(status::Custom(
-                Status::InternalServerError,
+                err.status_code,
                 Json(ErrorMessage {
                     trace_id,
-                    error_message: err.to_string(),
+                    error_message: err.message,
                     error_code: None,
                 }),
             ))
@@ -76,73 +58,60 @@ pub(crate) async fn join_game(
         trace_id.to_string(),
         id
     );
-    let game_query: Result<Option<Game>, surrealdb::Error> = db.conn.select(("games", id)).await;
-    //WTF??
-    return match game_query {
-        Ok(game) => match game {
-            None => {
-                log::info!("{} | Game with id {} does not exist", trace_id, id);
-                Err(status::Custom(
-                    Status::NotFound,
+    match db.get_game(id).await {
+        Ok(mut game) => {
+            if game.state != GameState::Pending {
+                log::error!(
+                    "{} | Game with id {} does exist, but is not available to join.",
+                    trace_id.to_string(),
+                    id
+                );
+                return Err(status::Custom(
+                    Status::Conflict,
                     Json(ErrorMessage {
                         trace_id,
-                        error_message: String::from("Couldn't find the game you're looking for."),
+                        error_message: String::from("The game is already active or finished."),
                         error_code: None,
                     }),
-                ))
+                ));
             }
-            Some(mut game) => {
-                if game.state != GameState::Pending {
-                    log::info!(
-                        "{} | Game with id {} does exist, but is not available to join.",
-                        trace_id.to_string(),
-                        id
-                    );
-                    return Err(status::Custom(
-                        Status::Conflict,
+            game.state = GameState::Ongoing;
+            match db.update_game(game).await {
+                Ok(_) => {
+                    log::info!("{} | Joined game with id {}", trace_id.to_string(), id);
+                    Ok(status::Custom(
+                        Status::Ok,
+                        Json(JoinGame {
+                            trace_id,
+                            message: String::from("Joined the game."),
+                        }),
+                    ))
+                }
+                Err(err) => {
+                    log::error!("{} | {}", trace_id.to_string(), err.message);
+                    Err(status::Custom(
+                        err.status_code,
                         Json(ErrorMessage {
                             trace_id,
-                            error_message: String::from("The game is already active or finished."),
+                            error_message: err.message,
                             error_code: None,
                         }),
-                    ));
+                    ))
                 }
-                game.state = GameState::Ongoing;
-                let update_result: Result<Option<Game>, surrealdb::Error> =
-                    db.conn.update(("games", id)).content(game).await;
-                if let Err(err) = update_result {
-                    log::error!("{} | {}", trace_id.to_string(), err.to_string());
-                    return Err(status::Custom(
-                        Status::InternalServerError,
-                        Json(ErrorMessage {
-                            trace_id,
-                            error_message: err.to_string(),
-                            error_code: None,
-                        }),
-                    ));
-                }
-                log::info!("{} | Joined game with id {}", trace_id.to_string(), id);
-                Ok(status::Custom(
-                    Status::Ok,
-                    Json(JoinGame {
-                        trace_id,
-                        message: String::from("Joined the game."),
-                    }),
-                ))
             }
-        },
+        }
         Err(err) => {
-            log::error!("{} | {}", trace_id.to_string(), err.to_string());
+            log::error!("{} | {}", trace_id.to_string(), err.message);
             Err(status::Custom(
-                Status::InternalServerError,
+                err.status_code,
                 Json(ErrorMessage {
                     trace_id,
-                    error_message: err.to_string(),
+                    error_message: err.message,
                     error_code: None,
                 }),
             ))
         }
-    };
+    }
 }
 
 #[get("/games/<id>")]
@@ -156,38 +125,24 @@ pub(crate) async fn get_game_state(
         trace_id.to_string(),
         id
     );
-    let game_query: Result<Option<Game>, surrealdb::Error> = db.conn.select(("games", id)).await;
-    match game_query {
-        Ok(game) => match game {
-            None => {
-                log::info!("{} | Game with id {} does not exist", trace_id, id);
-                Err(status::Custom(
-                    Status::NotFound,
-                    Json(ErrorMessage {
-                        trace_id,
-                        error_message: String::from("Couldn't find the game you're looking for."),
-                        error_code: None,
-                    }),
-                ))
-            }
-            Some(game) => {
-                log::info!("{} | Received game status {:?}", trace_id, game.state);
-                Ok(status::Custom(
-                    Status::Ok,
-                    Json(GetGameStatus {
-                        trace_id,
-                        game_status: game.state,
-                    }),
-                ))
-            }
-        },
+    match db.get_game(id).await {
+        Ok(game) => {
+            log::info!("{} | Received game status {:?}", trace_id, game.state);
+            Ok(status::Custom(
+                Status::Ok,
+                Json(GetGameStatus {
+                    trace_id,
+                    game_status: game.state,
+                }),
+            ))
+        }
         Err(err) => {
-            log::error!("{} | {}", trace_id.to_string(), err.to_string());
+            log::error!("{} | {}", trace_id.to_string(), err.message);
             Err(status::Custom(
-                Status::InternalServerError,
+                err.status_code,
                 Json(ErrorMessage {
                     trace_id,
-                    error_message: err.to_string(),
+                    error_message: err.message,
                     error_code: None,
                 }),
             ))
@@ -206,59 +161,47 @@ pub(crate) async fn cancel_game(
         trace_id.to_string(),
         id
     );
-    let game_query: Result<Option<Game>, surrealdb::Error> = db.conn.select(("games", id)).await;
-    match game_query {
-        Ok(game) => match game {
-            None => {
-                log::info!("{} | Game with id {} does not exist", trace_id, id);
+    match db.get_game(id).await {
+        Ok(mut game) => match game.state {
+            GameState::Pending | GameState::Ongoing => {
+                game.state = GameState::Cancelled;
+                match db.update_game(game).await {
+                    Ok(_) => {
+                        log::info!("{} | Cancelled the game with id {}", trace_id, id);
+                        Ok(status::Custom(Status::Ok, Json(CancelGame { trace_id })))
+                    }
+                    Err(err) => {
+                        log::error!("{} | {}", trace_id.to_string(), err.message);
+                        Err(status::Custom(
+                            err.status_code,
+                            Json(ErrorMessage {
+                                trace_id,
+                                error_message: err.message,
+                                error_code: None,
+                            }),
+                        ))
+                    }
+                }
+            }
+            _ => {
+                log::info!("{} | Game with id {} can not be cancelled", trace_id, id);
                 Err(status::Custom(
-                    Status::NotFound,
+                    Status::Conflict,
                     Json(ErrorMessage {
                         trace_id,
-                        error_message: String::from("Couldn't find the game you're looking for."),
+                        error_message: String::from("Game can not be cancelled. Either the game is already cancelled or it is already finished."),
                         error_code: None,
                     }),
                 ))
             }
-            Some(mut game) => match game.state {
-                GameState::Pending | GameState::Ongoing => {
-                    game.state = GameState::Cancelled;
-                    let update_result: Result<Option<Game>, surrealdb::Error> =
-                        db.conn.update(("games", id)).content(game).await;
-                    if let Err(err) = update_result {
-                        log::error!("{} | {}", trace_id.to_string(), err.to_string());
-                        return Err(status::Custom(
-                            Status::InternalServerError,
-                            Json(ErrorMessage {
-                                trace_id,
-                                error_message: err.to_string(),
-                                error_code: None,
-                            }),
-                        ));
-                    }
-                    log::info!("{} | Cancelled the game with id {}", trace_id, id);
-                    Ok(status::Custom(Status::Ok, Json(CancelGame { trace_id })))
-                }
-                _ => {
-                    log::info!("{} | Game with id {} can not be cancelled", trace_id, id);
-                    Err(status::Custom(
-                        Status::Conflict,
-                        Json(ErrorMessage {
-                            trace_id,
-                            error_message: String::from("Game can not be cancelled. Either the game is already cancelled or it is already finished."),
-                            error_code: None,
-                        }),
-                    ))
-                }
-            },
         },
         Err(err) => {
-            log::error!("{} | {}", trace_id.to_string(), err.to_string());
+            log::error!("{} | {}", trace_id.to_string(), err.message);
             Err(status::Custom(
-                Status::InternalServerError,
+                err.status_code,
                 Json(ErrorMessage {
                     trace_id,
-                    error_message: err.to_string(),
+                    error_message: err.message,
                     error_code: None,
                 }),
             ))
@@ -300,7 +243,7 @@ mod test {
         client
     }*/
 
-    const SURREALDB_VERSION: &str = "v1.5.4";
+    const SURREALDB_VERSION: &str = "v2.0.4";
 
     #[rocket::async_test]
     async fn test_create_game() {
@@ -312,7 +255,7 @@ mod test {
         let rocket = rocket::build();
         let config = Config {
             db_url: String::from(format!(
-                "127.0.0.1:{}",
+                "localhost:{}",
                 db_instance
                     .get_host_port_ipv4(surrealdb::SURREALDB_PORT)
                     .await
@@ -328,11 +271,6 @@ mod test {
         let response = client.post(uri!(super::create_game)).dispatch().await;
 
         assert_eq!(response.status(), Status::Created);
-        let response_message = response
-            .into_json::<responses::CreateGame>()
-            .await
-            .expect("Invalid response from server.");
-        assert_eq!(response_message.state, GameState::Pending);
     }
 
     #[rocket::async_test]
@@ -359,15 +297,16 @@ mod test {
             .unwrap();
         let db = client.rocket().state::<DbConnection>().unwrap();
         let game = Game::default();
-        let _: Vec<Game> = db
+        let created_game: Game = db
             .conn
             .create("games")
-            .content(&game)
+            .content(game)
             .await
-            .expect("Creating game failed.");
+            .expect("Creating game failed.")
+            .expect("");
 
         let response = client
-            .put(uri!(super::join_game(&game.id.id.to_string())))
+            .put(uri!(super::join_game(created_game.id.id.to_string())))
             .dispatch()
             .await;
 
@@ -434,15 +373,16 @@ mod test {
         let db = client.rocket().state::<DbConnection>().unwrap();
         let mut game = Game::default();
         game.state = GameState::Ongoing;
-        let _: Vec<Game> = db
+        let created_game: Game = db
             .conn
             .create("games")
-            .content(&game)
+            .content(game)
             .await
-            .expect("Creating game failed.");
+            .expect("Creating game failed.")
+            .expect("");
 
         let response = client
-            .put(uri!(super::join_game(game.id.id.to_string())))
+            .put(uri!(super::join_game(created_game.id.id.to_string())))
             .dispatch()
             .await;
 
@@ -480,14 +420,16 @@ mod test {
         let games = vec![game1, game2, game3];
 
         for game in games {
-            let _: Vec<Game> = db
+            let expected_state = game.state.clone();
+            let created_game: Game = db
                 .conn
                 .create("games")
-                .content(&game)
+                .content(game)
                 .await
-                .expect("Creating game failed.");
+                .expect("Creating game failed.")
+                .expect("");
             let response = client
-                .get(uri!(super::get_game_state(game.id.id.to_string())))
+                .get(uri!(super::get_game_state(created_game.id.id.to_string())))
                 .dispatch()
                 .await;
 
@@ -496,7 +438,7 @@ mod test {
                 .into_json::<responses::GetGameStatus>()
                 .await
                 .expect("Invalid response from server.");
-            assert_eq!(response.game_status, game.state);
+            assert_eq!(response.game_status, expected_state);
         }
     }
 
@@ -560,14 +502,15 @@ mod test {
         let games = vec![game1, game2];
 
         for game in games {
-            let _: Vec<Game> = db
+            let created_game: Game = db
                 .conn
                 .create("games")
-                .content(&game)
+                .content(game)
                 .await
-                .expect("Creating game failed.");
+                .expect("Creating game failed.")
+                .expect("");
             let response = client
-                .put(uri!(super::cancel_game(game.id.id.to_string())))
+                .put(uri!(super::cancel_game(created_game.id.id.to_string())))
                 .dispatch()
                 .await;
 
@@ -641,14 +584,15 @@ mod test {
         let games = vec![game1, game2];
 
         for game in games {
-            let _: Vec<Game> = db
+            let created_game: Game = db
                 .conn
                 .create("games")
-                .content(&game)
+                .content(game)
                 .await
-                .expect("Creating game failed.");
+                .expect("Creating game failed.")
+                .expect("");
             let response = client
-                .put(uri!(super::cancel_game(game.id.id.to_string())))
+                .put(uri!(super::cancel_game(created_game.id.id.to_string())))
                 .dispatch()
                 .await;
 
